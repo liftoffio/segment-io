@@ -1,4 +1,4 @@
-package kafka
+package segmentio
 
 import (
 	"context"
