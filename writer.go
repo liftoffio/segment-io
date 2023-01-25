@@ -328,8 +328,8 @@ type WriterConfig struct {
 }
 
 type TopicPartition struct {
-	topic     string
-	partition int32
+	Topic     string
+	Partition int32
 }
 
 // Validate method validates WriterConfig properties.
@@ -651,8 +651,8 @@ func (w *Writer) WriteMessages(ctx context.Context, msgs ...Message) error {
 		partition := balancer.Balance(msg, loadCachedPartitions(numPartitions)...)
 
 		key := TopicPartition{
-			topic:     topic,
-			partition: int32(partition),
+			Topic:     topic,
+			Partition: int32(partition),
 		}
 
 		assignments[key] = append(assignments[key], int32(i))
@@ -726,8 +726,8 @@ func (w *Writer) produce(key TopicPartition, batch *writeBatch) (*ProduceRespons
 	defer cancel()
 
 	return w.client(timeout).Produce(ctx, &ProduceRequest{
-		Partition:    int(key.partition),
-		Topic:        key.topic,
+		Partition:    int(key.Partition),
+		Topic:        key.Topic,
 		RequiredAcks: w.RequiredAcks,
 		Compression:  w.Compression,
 		Records: &writerRecords{
@@ -1114,13 +1114,13 @@ func (ptw *partitionWriter) writeBatch(batch *writeBatch) {
 			//
 			delay := backoff(attempt, ptw.w.writeBackoffMin(), ptw.w.writeBackoffMax())
 			ptw.w.withLogger(func(log Logger) {
-				log.Printf("backing off %s writing %d messages to %s (partition: %d)", delay, len(batch.msgs), key.topic, key.partition)
+				log.Printf("backing off %s writing %d messages to %s (partition: %d)", delay, len(batch.msgs), key.Topic, key.Partition)
 			})
 			time.Sleep(delay)
 		}
 
 		ptw.w.withLogger(func(log Logger) {
-			log.Printf("writing %d messages to %s (partition: %d)", len(batch.msgs), key.topic, key.partition)
+			log.Printf("writing %d messages to %s (partition: %d)", len(batch.msgs), key.Topic, key.Partition)
 		})
 
 		start := time.Now()
@@ -1148,7 +1148,7 @@ func (ptw *partitionWriter) writeBatch(batch *writeBatch) {
 		stats.errors.observe(1)
 
 		ptw.w.withErrorLogger(func(log Logger) {
-			log.Printf("error writing messages to %s (partition %d): %s", key.topic, key.partition, err)
+			log.Printf("error writing messages to %s (partition %d): %s", key.Topic, key.Partition, err)
 		})
 
 		if !isTemporary(err) && !isTransientNetworkError(err) {
@@ -1159,8 +1159,8 @@ func (ptw *partitionWriter) writeBatch(batch *writeBatch) {
 	if res != nil {
 		for i := range batch.msgs {
 			m := &batch.msgs[i]
-			m.Topic = key.topic
-			m.Partition = int(key.partition)
+			m.Topic = key.Topic
+			m.Partition = int(key.Partition)
 			m.Offset = res.BaseOffset + int64(i)
 
 			if m.Time.IsZero() {

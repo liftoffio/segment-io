@@ -126,8 +126,8 @@ func (r *Reader) subscribe(allAssignments map[string][]PartitionAssignment) {
 	for topic, assignments := range allAssignments {
 		for _, assignment := range assignments {
 			key := TopicPartition{
-				topic:     topic,
-				partition: int32(assignment.ID),
+				Topic:     topic,
+				Partition: int32(assignment.ID),
 			}
 			offsets[key] = assignment.Offset
 		}
@@ -1122,7 +1122,7 @@ func (r *Reader) Stats() ReaderStats {
 }
 
 func (r *Reader) getTopicPartitionOffset() map[TopicPartition]int64 {
-	key := TopicPartition{topic: r.config.Topic, partition: int32(r.config.Partition)}
+	key := TopicPartition{Topic: r.config.Topic, Partition: int32(r.config.Partition)}
 	return map[TopicPartition]int64{key: r.offset}
 }
 
@@ -1198,8 +1198,8 @@ func (r *Reader) Start(offsetsByPartition map[TopicPartition]int64) {
 				logger:           r.config.Logger,
 				errorLogger:      r.config.ErrorLogger,
 				brokers:          r.config.Brokers,
-				topic:            key.topic,
-				partition:        int(key.partition),
+				topic:            key.Topic,
+				partition:        int(key.Partition),
 				minBytes:         r.config.MinBytes,
 				maxBytes:         r.config.MaxBytes,
 				maxWait:          r.config.MaxWait,
