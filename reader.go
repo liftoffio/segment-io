@@ -134,7 +134,7 @@ func (r *Reader) subscribe(allAssignments map[string][]PartitionAssignment) {
 	}
 
 	r.mutex.Lock()
-	r.start(offsets)
+	r.Start(offsets)
 	r.mutex.Unlock()
 
 	r.withLogger(func(l Logger) {
@@ -817,7 +817,7 @@ func (r *Reader) FetchMessage(ctx context.Context) (Message, error) {
 		r.mutex.Lock()
 
 		if !r.closed && r.version == 0 {
-			r.start(r.getTopicPartitionOffset())
+			r.Start(r.getTopicPartitionOffset())
 		}
 
 		version := r.version
@@ -1038,7 +1038,7 @@ func (r *Reader) SetOffset(offset int64) error {
 		r.offset = offset
 
 		if r.version != 0 {
-			r.start(r.getTopicPartitionOffset())
+			r.Start(r.getTopicPartitionOffset())
 		}
 
 		r.activateReadLag()
@@ -1176,7 +1176,7 @@ func (r *Reader) readLag(ctx context.Context) {
 	}
 }
 
-func (r *Reader) start(offsetsByPartition map[topicPartition]int64) {
+func (r *Reader) Start(offsetsByPartition map[topicPartition]int64) {
 	if r.closed {
 		// don't start child reader if parent Reader is closed
 		return
