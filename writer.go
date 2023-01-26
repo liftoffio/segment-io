@@ -616,19 +616,6 @@ func (w *Writer) WriteMessages(ctx context.Context, msgs ...Message) error {
 	}
 
 	balancer := w.balancer()
-	batchBytes := w.batchBytes()
-
-	for i := range msgs {
-		n := int64(msgs[i].size())
-		if n > batchBytes {
-			// This error is left for backward compatibility with historical
-			// behavior, but it can yield O(N^2) behaviors. The expectations
-			// are that the program will check if WriteMessages returned a
-			// MessageTooLargeError, discard the message that was exceeding
-			// the maximum size, and try again.
-			return messageTooLarge(msgs, i)
-		}
-	}
 
 	// We use int32 here to half the memory footprint (compared to using int
 	// on 64 bits architectures). We map lists of the message indexes instead
