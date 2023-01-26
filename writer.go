@@ -204,7 +204,7 @@ type Writer struct {
 	group   sync.WaitGroup
 	mutex   sync.Mutex
 	closed  bool
-	writers map[TopicPartition]*partitionWriter
+	writers map[topicPartition]*partitionWriter
 
 	// writer stats are all made of atomic values, no need for synchronization.
 	// Use a pointer to ensure 64-bit alignment of the values. The once value is
@@ -327,7 +327,7 @@ type WriterConfig struct {
 	ErrorLogger Logger
 }
 
-type TopicPartition struct {
+type topicPartition struct {
 	topic     string
 	partition int32
 }
@@ -635,7 +635,7 @@ func (w *Writer) WriteMessages(ctx context.Context, msgs ...Message) error {
 	// of the message values for the same reason, int32 is 4 bytes, vs a full
 	// Message value which is 100+ bytes and contains pointers and contributes
 	// to increasing GC work.
-	assignments := make(map[TopicPartition][]int32)
+	assignments := make(map[topicPartition][]int32)
 
 	for i, msg := range msgs {
 		topic, err := w.chooseTopic(msg)
@@ -650,7 +650,7 @@ func (w *Writer) WriteMessages(ctx context.Context, msgs ...Message) error {
 
 		partition := balancer.Balance(msg, loadCachedPartitions(numPartitions)...)
 
-		key := TopicPartition{
+		key := topicPartition{
 			topic:     topic,
 			partition: int32(partition),
 		}
@@ -690,7 +690,7 @@ func (w *Writer) WriteMessages(ctx context.Context, msgs ...Message) error {
 	return werr
 }
 
-func (w *Writer) batchMessages(messages []Message, assignments map[TopicPartition][]int32) map[*writeBatch][]int32 {
+func (w *Writer) batchMessages(messages []Message, assignments map[topicPartition][]int32) map[*writeBatch][]int32 {
 	var batches map[*writeBatch][]int32
 	if !w.Async {
 		batches = make(map[*writeBatch][]int32, len(assignments))
@@ -700,7 +700,7 @@ func (w *Writer) batchMessages(messages []Message, assignments map[TopicPartitio
 	defer w.mutex.Unlock()
 
 	if w.writers == nil {
-		w.writers = map[TopicPartition]*partitionWriter{}
+		w.writers = map[topicPartition]*partitionWriter{}
 	}
 
 	for key, indexes := range assignments {
@@ -719,7 +719,7 @@ func (w *Writer) batchMessages(messages []Message, assignments map[TopicPartitio
 	return batches
 }
 
-func (w *Writer) produce(key TopicPartition, batch *writeBatch) (*ProduceResponse, error) {
+func (w *Writer) produce(key topicPartition, batch *writeBatch) (*ProduceResponse, error) {
 	timeout := w.writeTimeout()
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -981,7 +981,7 @@ func newBatchQueue(initialSize int) batchQueue {
 // partitionWriter is a writer for a topic-partion pair. It maintains messaging order
 // across batches of messages.
 type partitionWriter struct {
-	meta  TopicPartition
+	meta  topicPartition
 	queue batchQueue
 
 	mutex     sync.Mutex
@@ -992,7 +992,7 @@ type partitionWriter struct {
 	w *Writer
 }
 
-func newPartitionWriter(w *Writer, key TopicPartition) *partitionWriter {
+func newPartitionWriter(w *Writer, key topicPartition) *partitionWriter {
 	writer := &partitionWriter{
 		meta:  key,
 		queue: newBatchQueue(10),

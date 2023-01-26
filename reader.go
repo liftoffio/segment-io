@@ -122,10 +122,10 @@ func (r *Reader) unsubscribe() {
 }
 
 func (r *Reader) subscribe(allAssignments map[string][]PartitionAssignment) {
-	offsets := make(map[TopicPartition]int64)
+	offsets := make(map[topicPartition]int64)
 	for topic, assignments := range allAssignments {
 		for _, assignment := range assignments {
-			key := TopicPartition{
+			key := topicPartition{
 				topic:     topic,
 				partition: int32(assignment.ID),
 			}
@@ -1121,9 +1121,9 @@ func (r *Reader) Stats() ReaderStats {
 	return stats
 }
 
-func (r *Reader) getTopicPartitionOffset() map[TopicPartition]int64 {
-	key := TopicPartition{topic: r.config.Topic, partition: int32(r.config.Partition)}
-	return map[TopicPartition]int64{key: r.offset}
+func (r *Reader) getTopicPartitionOffset() map[topicPartition]int64 {
+	key := topicPartition{topic: r.config.Topic, partition: int32(r.config.Partition)}
+	return map[topicPartition]int64{key: r.offset}
 }
 
 func (r *Reader) withLogger(do func(Logger)) {
@@ -1176,7 +1176,7 @@ func (r *Reader) readLag(ctx context.Context) {
 	}
 }
 
-func (r *Reader) Start(offsetsByPartition map[TopicPartition]int64) {
+func (r *Reader) Start(offsetsByPartition map[topicPartition]int64) {
 	if r.closed {
 		// don't start child reader if parent Reader is closed
 		return
@@ -1190,7 +1190,7 @@ func (r *Reader) Start(offsetsByPartition map[TopicPartition]int64) {
 
 	r.join.Add(len(offsetsByPartition))
 	for key, offset := range offsetsByPartition {
-		go func(ctx context.Context, key TopicPartition, offset int64, join *sync.WaitGroup) {
+		go func(ctx context.Context, key topicPartition, offset int64, join *sync.WaitGroup) {
 			defer join.Done()
 
 			(&reader{
