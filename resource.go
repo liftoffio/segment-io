@@ -1,4 +1,4 @@
-package segmentio
+package skafka
 
 // https://github.com/apache/kafka/blob/trunk/clients/src/main/java/org/apache/kafka/common/resource/ResourceType.java
 type ResourceType int8

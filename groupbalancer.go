@@ -1,4 +1,4 @@
-package segmentio
+package skafka
 
 import (
 	"sort"

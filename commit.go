@@ -1,4 +1,4 @@
-package segmentio
+package skafka
 
 // A commit represents the instruction of publishing an update of the last
 // offset read by a program for a topic and partition.

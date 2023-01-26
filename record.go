@@ -1,4 +1,4 @@
-package segmentio
+package skafka
 
 import (
 	"github.com/segmentio/kafka-go/protocol"
