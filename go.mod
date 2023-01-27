@@ -1,4 +1,4 @@
-module github.com/liftoffio/segment-io
+module github.com/liftoffio/skafka
 
 go 1.15
 
@@ -11,6 +11,4 @@ require (
 	golang.org/x/net v0.0.0-20220706163947-c90051bbdb60
 )
 
-retract (
-	[v0.4.36, v0.4.37]
-)
+retract [v0.4.36, v0.4.37]
