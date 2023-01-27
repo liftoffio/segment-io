@@ -10,3 +10,7 @@ require (
 	github.com/xdg/scram v1.0.5
 	golang.org/x/net v0.0.0-20220706163947-c90051bbdb60
 )
+
+retract (
+	[v0.4.36, v0.4.37]
+)
