@@ -1013,7 +1013,7 @@ func (ptw *partitionWriter) writeBatches() {
 			return
 		}
 
-		ptw.writeBatch(batch)
+		go ptw.writeBatch(batch)
 	}
 }
 
