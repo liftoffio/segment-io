@@ -27,29 +27,29 @@ import (
 // by the function and test if it an instance of kafka.WriteErrors in order to
 // identify which messages have succeeded or failed, for example:
 //
-//	// Construct a synchronous writer (the default mode).
-//	w := &kafka.Writer{
-//		Addr:         Addr: kafka.TCP("localhost:9092", "localhost:9093", "localhost:9094"),
-//		Topic:        "topic-A",
-//		RequiredAcks: kafka.RequireAll,
-//	}
-//
-//	...
-//
-//  // Passing a context can prevent the operation from blocking indefinitely.
-//	switch err := w.WriteMessages(ctx, msgs...).(type) {
-//	case nil:
-//	case kafka.WriteErrors:
-//		for i := range msgs {
-//			if err[i] != nil {
-//				// handle the error writing msgs[i]
-//				...
-//			}
+//		// Construct a synchronous writer (the default mode).
+//		w := &kafka.Writer{
+//			Addr:         Addr: kafka.TCP("localhost:9092", "localhost:9093", "localhost:9094"),
+//			Topic:        "topic-A",
+//			RequiredAcks: kafka.RequireAll,
 //		}
-//	default:
-//		// handle other errors
+//
 //		...
-//	}
+//
+//	 // Passing a context can prevent the operation from blocking indefinitely.
+//		switch err := w.WriteMessages(ctx, msgs...).(type) {
+//		case nil:
+//		case kafka.WriteErrors:
+//			for i := range msgs {
+//				if err[i] != nil {
+//					// handle the error writing msgs[i]
+//					...
+//				}
+//			}
+//		default:
+//			// handle other errors
+//			...
+//		}
 //
 // In asynchronous mode, the program may configure a completion handler on the
 // writer to receive notifications of messages being written to kafka:
@@ -921,82 +921,11 @@ func (w *Writer) chooseTopic(msg Message) (string, error) {
 	return w.Topic, nil
 }
 
-type batchQueue struct {
-	queue   []*writeBatch
-	maxSize int
-
-	// Pointers are used here to make `go vet` happy, and avoid copying mutexes.
-	// It may be better to revert these to non-pointers and avoid the copies in
-	// a different way.
-	mutex *sync.Mutex
-	cond  *sync.Cond
-
-	closed bool
-}
-
-func (b *batchQueue) Put(batch *writeBatch) bool {
-	b.cond.L.Lock()
-	defer b.cond.L.Unlock()
-	defer b.cond.Broadcast()
-
-	if b.maxSize > 0 {
-		for len(b.queue) >= b.maxSize && !b.closed {
-			b.cond.Wait()
-		}
-	}
-
-	if b.closed {
-		return false
-	}
-	b.queue = append(b.queue, batch)
-	return true
-}
-
-func (b *batchQueue) Get() *writeBatch {
-	b.cond.L.Lock()
-	defer b.cond.L.Unlock()
-
-	for len(b.queue) == 0 && !b.closed {
-		b.cond.Wait()
-	}
-
-	if len(b.queue) == 0 {
-		return nil
-	}
-
-	batch := b.queue[0]
-	b.queue[0] = nil
-	b.queue = b.queue[1:]
-
-	return batch
-}
-
-func (b *batchQueue) Close() {
-	b.cond.L.Lock()
-	defer b.cond.L.Unlock()
-	defer b.cond.Broadcast()
-
-	b.closed = true
-}
-
-func newBatchQueue(initialSize, maxSize int) batchQueue {
-	bq := batchQueue{
-		queue:   make([]*writeBatch, 0, initialSize),
-		maxSize: maxSize,
-		mutex:   &sync.Mutex{},
-		cond:    &sync.Cond{},
-	}
-
-	bq.cond.L = bq.mutex
-
-	return bq
-}
-
-// partitionWriter is a writer for a topic-partion pair. It maintains messaging order
+// partitionWriter is a writer for a topic-partition pair. It maintains messaging order
 // across batches of messages.
 type partitionWriter struct {
 	meta  topicPartition
-	queue batchQueue
+	queue chan *writeBatch
 
 	mutex     sync.Mutex
 	currBatch *writeBatch
@@ -1008,25 +937,20 @@ type partitionWriter struct {
 
 func newPartitionWriter(w *Writer, key topicPartition) *partitionWriter {
 	writer := &partitionWriter{
-		meta:  key,
-		queue: newBatchQueue(10, w.MaxBufferedBatches),
-		w:     w,
+		meta: key,
+		w:    w,
+	}
+	if w.MaxBufferedBatches > 0 {
+		writer.queue = make(chan *writeBatch, w.MaxBufferedBatches)
+	} else {
+		writer.queue = make(chan *writeBatch)
 	}
 	w.spawn(writer.writeBatches)
 	return writer
 }
 
 func (ptw *partitionWriter) writeBatches() {
-	for {
-		batch := ptw.queue.Get()
-
-		// The only time we can return nil is when the queue is closed
-		// and empty. If the queue is closed that means
-		// the Writer is closed so once we're here it's time to exit.
-		if batch == nil {
-			return
-		}
-
+	for batch := range ptw.queue {
 		ptw.writeBatch(batch)
 	}
 }
@@ -1052,14 +976,14 @@ func (ptw *partitionWriter) writeMessages(msgs []Message, indexes []int32) map[*
 		}
 		if !batch.add(msgs[i], batchSize, batchBytes) {
 			batch.trigger()
-			ptw.queue.Put(batch)
+			ptw.queue <- batch
 			ptw.currBatch = nil
 			goto assignMessage
 		}
 
 		if batch.full(batchSize, batchBytes) {
 			batch.trigger()
-			ptw.queue.Put(batch)
+			ptw.queue <- batch
 			ptw.currBatch = nil
 		}
 
@@ -1092,7 +1016,7 @@ func (ptw *partitionWriter) awaitBatch(batch *writeBatch) {
 		// pw.currBatch != batch so we just move on.
 		// Otherwise, we detach the batch from the ptWriter and enqueue it for writing.
 		if ptw.currBatch == batch {
-			ptw.queue.Put(batch)
+			ptw.queue <- batch
 			ptw.currBatch = nil
 		}
 		ptw.mutex.Unlock()
@@ -1196,12 +1120,12 @@ func (ptw *partitionWriter) close() {
 
 	if ptw.currBatch != nil {
 		batch := ptw.currBatch
-		ptw.queue.Put(batch)
+		ptw.queue <- batch
 		ptw.currBatch = nil
 		batch.trigger()
 	}
 
-	ptw.queue.Close()
+	close(ptw.queue)
 }
 
 type writeBatch struct {
