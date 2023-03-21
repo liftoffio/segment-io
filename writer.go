@@ -130,6 +130,12 @@ type Writer struct {
 	// The default is to flush at least every second.
 	BatchTimeout time.Duration
 
+	// The maximum number of batches to buffer before blocking further message
+	// production.
+	//
+	// Defaults to 0, no limit.
+	MaxBufferedBatches int
+
 	// Timeout for read operations performed by the Writer.
 	//
 	// Defaults to 10 seconds.
@@ -916,7 +922,8 @@ func (w *Writer) chooseTopic(msg Message) (string, error) {
 }
 
 type batchQueue struct {
-	queue []*writeBatch
+	queue   []*writeBatch
+	maxSize int
 
 	// Pointers are used here to make `go vet` happy, and avoid copying mutexes.
 	// It may be better to revert these to non-pointers and avoid the copies in
@@ -931,6 +938,12 @@ func (b *batchQueue) Put(batch *writeBatch) bool {
 	b.cond.L.Lock()
 	defer b.cond.L.Unlock()
 	defer b.cond.Broadcast()
+
+	if b.maxSize > 0 {
+		for len(b.queue) >= b.maxSize && !b.closed {
+			b.cond.Wait()
+		}
+	}
 
 	if b.closed {
 		return false
@@ -966,11 +979,12 @@ func (b *batchQueue) Close() {
 	b.closed = true
 }
 
-func newBatchQueue(initialSize int) batchQueue {
+func newBatchQueue(initialSize, maxSize int) batchQueue {
 	bq := batchQueue{
-		queue: make([]*writeBatch, 0, initialSize),
-		mutex: &sync.Mutex{},
-		cond:  &sync.Cond{},
+		queue:   make([]*writeBatch, 0, initialSize),
+		maxSize: maxSize,
+		mutex:   &sync.Mutex{},
+		cond:    &sync.Cond{},
 	}
 
 	bq.cond.L = bq.mutex
@@ -995,7 +1009,7 @@ type partitionWriter struct {
 func newPartitionWriter(w *Writer, key topicPartition) *partitionWriter {
 	writer := &partitionWriter{
 		meta:  key,
-		queue: newBatchQueue(10),
+		queue: newBatchQueue(10, w.MaxBufferedBatches),
 		w:     w,
 	}
 	w.spawn(writer.writeBatches)
